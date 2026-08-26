@@ -1,3 +1,6 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: VAE slicing on the multiview decoder, which stopped it overflowing VRAM.
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -48,6 +51,12 @@ class multiviewDiffusionNet:
 
         pipeline.scheduler = UniPCMultistepScheduler.from_config(pipeline.scheduler.config, timestep_spacing="trailing")
         pipeline.set_progress_bar_config(disable=True)
+        # The final decode is a single batch of num_view*2 images (12 at the default
+        # 6 views x albedo/mr). Decoding them together needs several GB of decoder
+        # activations on top of the resident weights; on a 16GB card that pushes past
+        # VRAM and Windows silently pages to system RAM, which took the decode from
+        # ~1s to 36s. Slicing decodes one image at a time for the same result.
+        pipeline.vae.enable_slicing()
         pipeline.eval()
         setattr(pipeline, "view_size", cfg.model.params.get("view_size", 320))
         self.pipeline = pipeline.to(self.device)
