@@ -1,3 +1,6 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: torch imported before the CUDA kernel so the DLLs load in the right order on Windows.
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -12,8 +15,13 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
-import custom_rasterizer_kernel
+# torch must be imported first: the compiled kernel links against torch's DLLs
+# (c10.dll, torch_cpu.dll, ...), and on Windows those are only resolvable after
+# torch/__init__.py registers its lib directory via os.add_dll_directory().
+# Importing the kernel first fails with "DLL load failed". Linux is unaffected
+# because it resolves via RPATH.
 import torch
+import custom_rasterizer_kernel
 
 
 def rasterize(pos, tri, resolution, clamp_depth=torch.zeros(0), use_depth_prior=0):
