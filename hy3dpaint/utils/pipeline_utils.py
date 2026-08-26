@@ -1,3 +1,6 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: texture baking moved out of the per-view loop (it was O(n^2)).
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -120,7 +123,9 @@ class ViewProcessor:
             project_textures.append(project_texture)
             project_weighted_cos_maps.append(project_cos_map)
             project_boundary_maps.append(project_boundary_map)
-            texture, ori_trust_map = self.render.fast_bake_texture(project_textures, project_weighted_cos_maps)
+        # fast_bake_texture used to run inside the loop, re-merging every view accumulated so
+        # far on each iteration (O(n^2) full-texture passes). Only the final merge is used.
+        texture, ori_trust_map = self.render.fast_bake_texture(project_textures, project_weighted_cos_maps)
         return texture, ori_trust_map > 1e-8
 
     def texture_inpaint(self, texture, mask, defualt=None):
