@@ -1,193 +1,320 @@
+# Hunyuan3D-2.1 — Windows / 16 GB VRAM Fork
 
-<p align="center">
-  <img src="assets/images/teaser.jpg">
-</p>
+Image → 3D model, running locally on Windows. This is a fork of
+[Tencent-Hunyuan/Hunyuan3D-2.1](https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1)
+with Windows build fixes and memory/speed work so it fits on a **16 GB** card.
 
+Upstream states it needs **29 GB VRAM** for shape + texture. This fork runs the
+full pipeline in **~11 GB**, or ~15 GB on the high-quality preset.
 
-<div align="center">
-  <a href=https://3d.hunyuan.tencent.com target="_blank"><img src=https://img.shields.io/badge/Official%20Site-333399.svg?logo=homepage height=22px></a>
-  <a href=https://huggingface.co/spaces/tencent/Hunyuan3D-2.1  target="_blank"><img src=https://img.shields.io/badge/%F0%9F%A4%97%20Demo-276cb4.svg height=22px></a>
-  <a href=https://huggingface.co/tencent/Hunyuan3D-2.1 target="_blank"><img src=https://img.shields.io/badge/%F0%9F%A4%97%20Models-d96902.svg height=22px></a>
-  <a href=https://3d-models.hunyuan.tencent.com/ target="_blank"><img src= https://img.shields.io/badge/Page-bb8a2e.svg?logo=github height=22px></a>
-  <a href=https://discord.gg/dNBrdrGGMa target="_blank"><img src= https://img.shields.io/badge/Discord-white.svg?logo=discord height=22px></a>
-  <a href=https://arxiv.org/pdf/2506.15442 target="_blank"><img src=https://img.shields.io/badge/Report-b5212f.svg?logo=arxiv height=22px></a>
-  <a href=https://x.com/TencentHunyuan target="_blank"><img src=https://img.shields.io/badge/Hunyuan-black.svg?logo=x height=22px></a>
- <a href="#community-resources" target="_blank"><img src=https://img.shields.io/badge/Community-lavender.svg?logo=homeassistantcommunitystore height=22px></a>
-</div>
+Powered by Tencent Hunyuan.
 
-[//]: # (  <a href=# target="_blank"><img src=https://img.shields.io/badge/Report-b5212f.svg?logo=arxiv height=22px></a>)
+---
 
-[//]: # (  <a href=# target="_blank"><img src= https://img.shields.io/badge/Colab-8f2628.svg?logo=googlecolab height=22px></a>)
+## ⚠️ Read this first — what it is good at
 
-[//]: # (  <a href="#"><img alt="PyPI - Downloads" src="https://img.shields.io/pypi/v/mulankit?logo=pypi"  height=22px></a>)
-<br>
+**This model makes OBJECTS, not characters.**
 
-## 🔥 News
+That is not a limitation of this fork — it is what the model was trained on.
+Tencent's own documentation says it targets:
 
-- Jul 26, 2025: 🤗 We release the first open-source, simulation-capable, immersive 3D world generation model, [HunyuanWorld-1.0](https://github.com/Tencent-Hunyuan/HunyuanWorld-1.0)!
-- Jun 19, 2025: 👋 We present the [technical report](https://arxiv.org/pdf/2506.15442) of Hunyuan3D-2.1, please check out the details and spark some discussion!
-- Jun 13, 2025: 🤗 We release the first production-ready 3D asset generation model, Hunyuan3D-2.1!
+> gaming assets, e-commerce products, and general 3D object creation
+> **rather than character or humanoid generation**
 
-> Join our **[Wechat](#)** and **[Discord](https://discord.gg/dNBrdrGGMa)** group to discuss and find help from us.
+Its training data is object datasets: Objaverse-XL, ShapeNet, ModelNet40, Thingi10K.
+There is no character or anime dataset in there.
 
-| Wechat Group                                     | Xiaohongshu                                           | X                                           | Discord                                           |
-|--------------------------------------------------|-------------------------------------------------------|---------------------------------------------|---------------------------------------------------|
-| <img src="assets/qrcode/wechat.png"  height=140> | <img src="assets/qrcode/xiaohongshu.png"  height=140> | <img src="assets/qrcode/x.png"  height=140> | <img src="assets/qrcode/discord.png"  height=140> |        
+| Works well | Works badly |
+|---|---|
+| Props — sword, cup, chair, lamp, bag | Anime / game characters |
+| Furniture, food, tools, machines | Faces (a full-body render gives the face ~61 px) |
+| Clothing pieces — skirt, jacket, hood | Anything needing a skeleton |
+| Photo of a real object → 3D | Separate hair / skin / cloth materials |
+| Game background assets in bulk | Exact replication of a 2D drawing |
 
-## 🤗 Community Contribution Leaderboard
-1. By [@visualbruno](https://github.com/visualbruno)
-  - ComfyUI-Hunyuan3d-2-1: https://github.com/visualbruno/ComfyUI-Hunyuan3d-2-1
-2. By [@VR-Jobs](https://github.com/VR-Jobs)
-  - Hunyuan3d-2-1 Unity Support: https://github.com/VR-Jobs/Hunyuan3D-2.1-Unity-XR-PC-Phone
+**No setting fixes the character case.** There is no rigging, no bones, and the
+whole model is one mesh with one baked texture. If you want an anime character,
+use [VRoid Studio](https://vroid.com/en/studio) (free, rigged, correct materials)
+and use this for the props they hold.
 
-## ☯️ **Hunyuan3D 2.1**
+---
 
-### Architecture
+## What is different from upstream
 
-Tencent Hunyuan3D-2.1 is a scalable 3D asset creation system that advances state-of-the-art 3D generation through two pivotal innovations: Fully Open-Source Framework and  Physically-Based Rendering (PBR) Texture Synthesis. For the first time, the system releases full model weights and training code, enabling community developers to directly fine-tune and extend the model for diverse downstream applications. This transparency accelerates academic research and industrial deployment. Moreover, replacing the prior RGB-based texture model, the upgraded PBR pipeline leverages  physics-grounded material simulation  to generate textures with photorealistic light interaction (e.g., metallic reflections, subsurface scattering).
+**Windows fixes**
+- `int64` types in the CUDA kernel (`long` is 32-bit on MSVC)
+- torch imported before the kernel, so the DLLs load in the right order
+- a Windows kernel source directory
+- `DifferentiableRenderer/setup.py`, replacing `compile_mesh_painter.sh`
+  (that script calls `c++` and `python3-config`, which do not exist on Windows)
+- `u2net` path pinned to the repo folder so it travels with the project
+- HuggingFace cache resolution, with a fall back to cache when offline
 
-<p align="left">
-  <img src="assets/images/pipeline.png">
-</p>
+**Fits 16 GB, and faster**
+- only one model on the GPU at a time (shape / paint / multiview swap out)
+- VAE decoding split into slices — **36 s → 0.6 s**, the single biggest win.
+  Decoding 12 views at once overflowed VRAM and Windows silently paged to
+  system RAM.
+- dropped a redundant classifier-free-guidance branch; identical output, one
+  third less UNet work
+- fixed a texture bake loop that redid all previous views on every iteration
+- cuDNN autotune left **off** — it cost 26 s on the first generation and gave
+  nothing back
 
-### Performance
+**Features**
+- `MultiView` tab — optional front / back / left / right reference images
+- mesh detail before texturing is adjustable (upstream locked it at 40 000 faces)
+- one-shot setup, build and launch scripts
 
-We have evaluated Hunyuan3D 2.1 with other open-source as well as close-source 3d-generation methods.
-The numerical results indicate that Hunyuan3D 2.1 surpasses all baselines in the quality of generated textured 3D assets
-and the condition following ability.
+---
 
-| Model                   | ULIP-T(⬆)   | ULIP-I(⬆) | Uni3D-T(⬆)      | Uni3D-I(⬆) |
-|-------------------------|-----------|-------------|-------------|---------------|
-| Michelangelo  | 0.0752     | 0.1152      | 0.2133     | 0.2611         |
-| Craftsman | 0.0745     | 0.1296      | 0.2375     | 0.2987         |
-| TripoSG | 0.0767     | 0.1225      | 0.2506     | 0.3129       |
-| Step1X-3D | 0.0735     | 0.1183      | 0.2554     | 0.3195         |
-| Trellis | 0.0769     | 0.1267      | 0.2496     | 0.3116         |
-| Direct3D-S2 | 0.0706     | 0.1134      | 0.2346     | 0.2930         |
-| Hunyuan3D-Shape-2.1           | **0.0774** | **0.1395**  | **0.2556** | **0.3213** |
+## Requirements
 
+| | |
+|---|---|
+| OS | Windows 10 / 11 x64 |
+| GPU | NVIDIA, 16 GB VRAM. Built for RTX 50-series (`sm_120`); RTX 20/30/40 also work |
+| Driver | CUDA 12.8 capable — check with `nvidia-smi` |
+| Python | 3.11 exactly (the shipped `.pyd` files are `cp311`) |
+| Disk | ~45 GB (≈25 GB install, ≈20 GB models) |
+| Build tools | [Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/downloads/), "Desktop development with C++" |
+| CUDA Toolkit | 12.8, must match your torch build |
 
-| Model                   | CLIP-FiD(⬇)   | CMMD(⬇) | CLIP-I(⬆)      | LPIPS(⬇) |
-|-------------------------|-----------|-------------|-------------|---------------|
-| SyncMVD-IPA  | 28.39     | 2.397      | 0.8823     | 0.1423         |
-| TexGen | 28.24     | 2.448      | 0.8818     | 0.1331         |
-| Hunyuan3D-2.0 | 26.44     | 2.318     | 0.8893     | 0.1261         |
-| Hunyuan3D-Paint-2.1           | **24.78** | **2.191**  | **0.9207** | **0.1211**     |
+Only needed if you compile the extensions yourself — see step 3.
 
+---
 
-
-## 🎁 Models Zoo
-
-It takes 10 GB VRAM for shape generation, 21GB for texture generation and 29GB for shape and texture generation in total.
-
-
-| Model                      | Description                 | Date       | Size | Huggingface                                                                               |
-|----------------------------|-----------------------------|------------|------|-------------------------------------------------------------------------------------------| 
-| Hunyuan3D-Shape-v2-1         | Image to Shape Model        | 2025-06-14 | 3.3B | [Download](https://huggingface.co/tencent/Hunyuan3D-2.1/tree/main/hunyuan3d-dit-v2-1)         |
-| Hunyuan3D-Paint-v2-1       | Texture Generation Model    | 2025-06-14 | 2B | [Download](https://huggingface.co/tencent/Hunyuan3D-2.1/tree/main/hunyuan3d-paintpbr-v2-1)       |
-
-
-## 🤗 Get Started with Hunyuan3D 2.1
-
-Hunyuan3D 2.1 supports Macos, Windows, Linux. You may follow the next steps to use Hunyuan3D 2.1 via:
-
-### Install Requirements
-We test our model with Python 3.10 and PyTorch 2.5.1+cu124.
-```bash
-pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements.txt
-
-cd hy3dpaint/custom_rasterizer
-pip install -e .
-cd ../..
-cd hy3dpaint/DifferentiableRenderer
-bash compile_mesh_painter.sh
-cd ../..
-
-wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth -P hy3dpaint/ckpt
-```
-
-### Code Usage
-
-We designed a diffusers-like API to use our shape generation model - Hunyuan3D-Shape and texture synthesis model -
-Hunyuan3D-Paint.
-
-```python
-import sys
-sys.path.insert(0, './hy3dshape')
-sys.path.insert(0, './hy3dpaint')
-from textureGenPipeline import Hunyuan3DPaintPipeline
-from textureGenPipeline import Hunyuan3DPaintPipeline, Hunyuan3DPaintConfig
-from hy3dshape.pipelines import Hunyuan3DDiTFlowMatchingPipeline
-
-# let's generate a mesh first
-shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained('tencent/Hunyuan3D-2.1')
-mesh_untextured = shape_pipeline(image='assets/demo.png')[0]
-
-paint_pipeline = Hunyuan3DPaintPipeline(Hunyuan3DPaintConfig(max_num_view=6, resolution=512))
-mesh_textured = paint_pipeline(mesh_path, image_path='assets/demo.png')
-```
-
-
-### Gradio App
-
-You could also host a [Gradio](https://www.gradio.app/) App in your own computer via:
-
+## Installation
 
 ```bash
-python3 gradio_app.py \
-  --model_path tencent/Hunyuan3D-2.1 \
-  --subfolder hunyuan3d-dit-v2-1 \
-  --texgen_model_path tencent/Hunyuan3D-2.1 \
-  --low_vram_mode
+git clone https://github.com/official-imvoiid/Hunyuan3D-2.1
 ```
 
+If the clone fails on long filenames:
 
-## 🔗 BibTeX
-
-If you found this repository helpful, please cite our reports:
-
-```bibtex
-@misc{hunyuan3d2025hunyuan3d,
-    title={Hunyuan3D 2.1: From Images to High-Fidelity 3D Assets with Production-Ready PBR Material},
-    author={Tencent Hunyuan3D Team},
-    year={2025},
-    eprint={2506.15442},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV}
-}
-
-@misc{hunyuan3d22025tencent,
-    title={Hunyuan3D 2.0: Scaling Diffusion Models for High Resolution Textured 3D Assets Generation},
-    author={Tencent Hunyuan3D Team},
-    year={2025},
-    eprint={2501.12202},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV}
-}
-
-@misc{yang2024hunyuan3d,
-    title={Hunyuan3D 1.0: A Unified Framework for Text-to-3D and Image-to-3D Generation},
-    author={Tencent Hunyuan3D Team},
-    year={2024},
-    eprint={2411.02293},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV}
-}
+```bash
+git config --global core.longpaths true
 ```
 
-## Acknowledgements
+### 1. Environment
 
-We would like to thank the contributors to
-the [TripoSG](https://github.com/VAST-AI-Research/TripoSG), [Trellis](https://github.com/microsoft/TRELLIS),  [DINOv2](https://github.com/facebookresearch/dinov2), [Stable Diffusion](https://github.com/Stability-AI/stablediffusion), [FLUX](https://github.com/black-forest-labs/flux), [diffusers](https://github.com/huggingface/diffusers), [HuggingFace](https://huggingface.co), [CraftsMan3D](https://github.com/wyysf-98/CraftsMan3D), [Michelangelo](https://github.com/NeuralCarver/Michelangelo/tree/main), [Hunyuan-DiT](https://github.com/Tencent-Hunyuan/HunyuanDiT), and [HunyuanVideo](https://github.com/Tencent-Hunyuan/HunyuanVideo) repositories, for their open research and
-exploration.
+```bash
+Setup.bat
+```
 
-## Star History
+Downloads portable Miniconda into `installer_files\`, pins conda's env and
+package folders to this directory, and creates a Python 3.11 environment. Nothing
+is installed system-wide. Safe to re-run — finished steps are skipped.
 
-<a href="https://star-history.com/#Tencent-Hunyuan/Hunyuan3D-2.1&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tencent-Hunyuan/Hunyuan3D-2.1&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Tencent-Hunyuan/Hunyuan3D-2.1&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Tencent-Hunyuan/Hunyuan3D-2.1&type=Date" />
- </picture>
-</a>
+### 2. AI models (~22 GB)
+
+```bash
+GetHFModels.bat
+```
+
+| Repo | Size | |
+|---|---|---|
+| `tencent/Hunyuan3D-2.1` | ~13 GB | required |
+| `facebook/dinov2-giant` | ~4.2 GB | required |
+| `tencent/Hunyuan3D-2mv` | ~4.6 GB | asks — only for the MultiView tab |
+
+Set `HF_HOME` first if you want them on another drive:
+
+```bash
+setx HF_HOME "D:\huggingface"
+```
+
+### 3. Python packages and native extensions
+
+```bash
+Build.bat
+```
+
+Detects your toolchain and sets it up **for that window only** — your permanent
+PATH is never modified. It looks for **system** tools first and offers the conda
+copies only if a system one is missing.
+
+```
+python    OK    [conda env]
+MSVC C++  OK    [system] ...\2022\BuildTools
+nvcc      OK    [system] ...\CUDA\v12.8
+GPU       NVIDIA GeForce RTX 5070 Ti  (sm_120)
+torch     will install cu128 build (covers RTX 20/30/40/50)
+```
+
+Then pick **6** to run everything in order:
+
+```
+1  Install PyTorch  (GPU build - DO THIS FIRST)
+2  Install requirements.txt
+3  Install deepspeed
+4  Build custom_rasterizer      (needs MSVC + CUDA)
+5  Build DifferentiableRenderer (needs MSVC only)
+6  Do 1-5 in order
+7  Open a shell with this build environment
+```
+
+PyTorch is step 1 on purpose: `requirements.txt` has no `torch` line, so pip
+would otherwise pull the **CPU** build in as a dependency of `torchmetrics` and
+your GPU would never be used. The script verifies `torch.cuda.is_available()`
+after installing and warns if it is False.
+
+The GPU architecture is read from the driver, so nothing needs editing for a
+different card.
+
+### 4. Two remaining model files
+
+```bash
+GetRM_Models.bat
+```
+
+`u2net.onnx` (168 MB) and `RealESRGAN_x4plus.pth` (64 MB) — both too large for
+GitHub. Verified by MD5, safe to re-run.
+
+### 5. Run
+
+```bash
+StartHunyuan3D.bat
+```
+
+Open **http://localhost:8080**.
+
+First start takes **2–4 minutes** and is silent for most of it while the 6.9 GB
+shape model loads. Wait for `Application startup complete`.
+
+---
+
+## Using it
+
+**Image Prompt** — one image. Uses `Hunyuan3D-2.1`. Best single-image geometry.
+
+**MultiView Prompt** — front / back / left / right, any combination. Uploading
+*any* view here switches to `Hunyuan3D-2mv` automatically; leave all four empty
+and it stays on 2.1. Texturing uses 2.1 either way.
+
+Multiview pins the back and sides the single-image model has to invent. The
+trade-off: 2mv is a 2.0-generation shape model, so per-view surface detail is
+slightly below 2.1.
+
+Tip: turn **Randomize seed** off while comparing settings, or you are changing
+two things at once.
+
+---
+
+## Settings
+
+Two kinds. Sliders change per generation; flags need a restart.
+
+### In the app — no restart
+
+`Inference Steps` · `Octree Resolution` · `Guidance Scale` · `Number of Chunks` ·
+`Seed` · `Remove Background`
+
+### In `StartHunyuan3D.bat` — restart required
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--view_resolution` | 768 | texture detail. **768 is the maximum a 16 GB card can do** — 1024 does not OOM, it thrashes and never finishes |
+| `--max_num_view` | 8 | number of camera views |
+| `--texture_size` | 4096 | texture image size |
+| `--render_size` | 2048 | render size used for baking |
+| `--max_face_num` | 100000 | mesh detail before texturing (upstream: 40000) |
+| `--low_vram_mode` | on | one model on the GPU at a time — required at 16 GB |
+| `--enable_flashvdm` | on | faster shape decoding |
+
+A ~65 s draft preset is written as comments inside the file.
+
+Do not raise `--max_face_num` to 200000 — it costs another 48 s in UV unwrap
+alone for almost no visible gain.
+
+**Careful:** "Target Face Number" in the Export tab is **not** `--max_face_num`.
+It only applies with "Simplify Mesh" ticked and does nothing for texture quality.
+
+### Environment switches
+
+| | |
+|---|---|
+| `HY3D_PROFILE=1` | per-phase time and VRAM breakdown in the console |
+| `HY3D_FAST_CFG=0` | restore the original 3-branch texture guidance |
+
+---
+
+## Performance
+
+Measured on an RTX 5070 Ti (16 GB), one textured model:
+
+| Preset | Time | Peak VRAM |
+|---|---|---|
+| Draft (6 views @ 512, 2048 texture, 40k faces) | 64–67 s | 10.8 GB |
+| Default (8 views @ 768, 4096 texture, 100k faces) | ~164 s | 15.0 GB |
+| MultiView | ~197 s | 15.3 GB |
+
+Upstream, unmodified, requires 29 GB and will not run at all.
+
+---
+
+## Rebuilding on another PC
+
+The `.pyd` files in this repo are **Python 3.11 / Windows x64 only**. On any
+other Python version they will not load and must be rebuilt:
+
+```bash
+Build.bat
+```
+
+Pick 4 and 5. The CUDA architecture comes from `nvidia-smi`, so no editing is
+needed for a different GPU — just install the CUDA Toolkit matching your torch:
+
+```bash
+python -c "import torch; print(torch.version.cuda)"
+```
+
+---
+
+## Troubleshooting
+
+**`Filename too long` on clone**
+`git config --global core.longpaths true`
+
+**`InPaint Function CAN NOT BE Imported!!!`**
+`mesh_inpaint_processor.cp311-win_amd64.pyd` must sit next to `MeshRender.py`
+inside `hy3dpaint\DifferentiableRenderer\`, not in site-packages — it is imported
+relatively.
+
+**Out of memory**
+Lower `--view_resolution 512` and `--texture_size 2048`.
+
+**`Python script failed to run.` with no traceback above it**
+It was interrupted, not broken. Startup is silent for 2–4 minutes.
+
+**`Too little data for declared Content-Length` in the console**
+Harmless. A Gradio preview race when several images are dropped in quickly; the
+image reloads itself. Already suppressed.
+
+**deepspeed fails to build**
+Only used for training — `gradio_app.py` never imports it, so generation works
+without it. `_dsbuild.py` works around an upstream packaging bug: deepspeed's
+`setup.py` requires `bin/deepspeed.bat` on Windows, but its sdist ships no `.bat`
+files at all.
+
+**The face looks blurry**
+That is the limit, not a bug. On a full-body subject the face gets about 61 px at
+`--view_resolution 768`, and 1024 does not fit in 16 GB. Paint it by hand in
+`save_dir\<id>\textured_mesh.jpg` instead — it maps straight back onto the mesh.
+
+---
+
+## License
+
+Licensed under the **Tencent Hunyuan 3D 2.1 Community License Agreement**.
+See [LICENSE](LICENSE) and [Notice.txt](Notice.txt).
+
+Tencent Hunyuan 3D 2.1 is licensed under the Tencent Hunyuan 3D 2.1 Community
+License Agreement, Copyright © 2025 Tencent. All Rights Reserved. The trademark
+rights of "Tencent Hunyuan" are owned by Tencent or its affiliate.
+
+**Not available in the European Union, the United Kingdom, or South Korea** —
+the licence excludes those territories.
+
+Modified files carry a notice of the change, as the licence requires. Tencent is
+not affiliated with, and does not endorse, this fork.
