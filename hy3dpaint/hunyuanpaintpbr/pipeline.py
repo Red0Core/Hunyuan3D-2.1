@@ -1,3 +1,7 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: 2-branch classifier-free guidance (the third branch cancels algebraically)
+# and optional per-phase profiling.
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -12,6 +16,8 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
+import os
+import time
 from typing import Any, Dict, Optional
 from diffusers.models import AutoencoderKL, UNet2DConditionModel
 from diffusers.schedulers import KarrasDiffusionSchedulers
@@ -55,6 +61,43 @@ __all__ = [
     "RefAttnProcessor2_0",
     "PoseRoPEAttnProcessor2_0",
 ]
+
+# ---------------------------------------------------------------------------
+# 2-branch classifier-free guidance.
+#
+# The stock path runs the UNet on three copies of the batch:
+#   0 uncond (ref_scale 0, dino zeroed)
+#   1 ref    (ref_scale 1, dino zeroed)
+#   2 full   (ref_scale 1, dino real)
+# and combines them as
+#   uncond + s*v*(ref - uncond) + s*v*(full - ref)
+# in which the `ref` terms cancel exactly, leaving uncond + s*v*(full - uncond).
+# So branch 1 only affects the result through rescale_noise_cfg, which is dead
+# unless guidance_rescale > 0 (default 0.0). Dropping it cuts the UNet batch by
+# a third -- the multiview stage is both the slowest step and the VRAM peak.
+#
+# Set HY3D_FAST_CFG=0 to restore the original three-branch path.
+# ---------------------------------------------------------------------------
+FAST_CFG = os.environ.get("HY3D_FAST_CFG", "1") == "1"
+
+
+def cfg_branches(guidance_rescale=0.0):
+    """Number of CFG batch copies to run. 2 is equivalent when no rescale is used."""
+    return 2 if (FAST_CFG and not guidance_rescale) else 3
+
+
+_PROFILE = os.environ.get("HY3D_PROFILE") == "1"
+_tmark = [0.0]
+
+
+def _mark(name):
+    """Log wall time per multiview sub-phase when HY3D_PROFILE=1."""
+    if not _PROFILE:
+        return
+    torch.cuda.synchronize()
+    now = time.time()
+    print(f"[mv] {name:<22} {now - _tmark[0]:6.2f}s", flush=True)
+    _tmark[0] = now
 
 
 def to_rgb_image(maybe_rgba: Image.Image):
@@ -208,6 +251,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             List[PIL.Image]: Generated multiview PBR textures
         """
 
+        _tmark[0] = time.time()
         self.prepare()
         if images is None:
             raise ValueError("Inputting embeddings not supported for this pipeline. Please pass an image.")
@@ -228,9 +272,11 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
         assert batch_size == 1
         assert num_images_per_prompt == 1
 
+        _mark('setup')
         if self.unet.use_ra:
             ref_latents = self.encode_images(images_vae)
             cached_condition["ref_latents"] = ref_latents
+        _mark('encode ref')
 
         def convert_pil_list_to_tensor(images):
             bg_c = [1.0, 1.0, 1.0]
@@ -263,6 +309,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
 
             cached_condition["position_maps"] = cached_condition["images_position"]
             cached_condition["embeds_position"] = self.encode_images(cached_condition["images_position"])
+        _mark('encode normal+pos')
 
         if self.unet.use_learned_text_clip:
 
@@ -298,34 +345,39 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
                 negative_prompt_embeds = torch.zeros_like(prompt_embeds)
 
         if guidance_scale > 1:
+            # n_cfg branches: [uncond, (ref,) full] -- see cfg_branches()
+            n_cfg = cfg_branches(cached_condition.get("guidance_rescale", 0.0))
             if self.unet.use_ra:
                 cached_condition["ref_latents"] = cached_condition["ref_latents"].repeat(
-                    3, *([1] * (cached_condition["ref_latents"].dim() - 1))
+                    n_cfg, *([1] * (cached_condition["ref_latents"].dim() - 1))
                 )
-                cached_condition["ref_scale"] = torch.as_tensor([0.0, 1.0, 1.0]).to(cached_condition["ref_latents"])
+                cached_condition["ref_scale"] = torch.as_tensor([0.0] + [1.0] * (n_cfg - 1)).to(
+                    cached_condition["ref_latents"]
+                )
 
             if self.unet.use_dino:
                 zero_states = torch.zeros_like(cached_condition["dino_hidden_states"])
                 cached_condition["dino_hidden_states"] = torch.cat(
-                    [zero_states, zero_states, cached_condition["dino_hidden_states"]]
+                    [zero_states] * (n_cfg - 1) + [cached_condition["dino_hidden_states"]]
                 )
 
                 del zero_states
             if "embeds_normal" in cached_condition:
                 cached_condition["embeds_normal"] = cached_condition["embeds_normal"].repeat(
-                    3, *([1] * (cached_condition["embeds_normal"].dim() - 1))
+                    n_cfg, *([1] * (cached_condition["embeds_normal"].dim() - 1))
                 )
 
             if "embeds_position" in cached_condition:
                 cached_condition["embeds_position"] = cached_condition["embeds_position"].repeat(
-                    3, *([1] * (cached_condition["embeds_position"].dim() - 1))
+                    n_cfg, *([1] * (cached_condition["embeds_position"].dim() - 1))
                 )
 
             if "position_maps" in cached_condition:
                 cached_condition["position_maps"] = cached_condition["position_maps"].repeat(
-                    3, *([1] * (cached_condition["position_maps"].dim() - 1))
+                    n_cfg, *([1] * (cached_condition["position_maps"].dim() - 1))
                 )
 
+        _mark('cfg prep')
         images = self.denoise(
             None,
             *args,
@@ -573,9 +625,10 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
         # For classifier free guidance, we need to do two forward passes.
         # Here we concatenate the unconditional and text embeddings into a single batch
         # to avoid doing two forward passes
+        n_cfg = cfg_branches(self.guidance_rescale)
         if self.do_classifier_free_guidance:
             # prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds])
-            prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds, prompt_embeds])
+            prompt_embeds = torch.cat([negative_prompt_embeds] + [prompt_embeds] * (n_cfg - 1))
 
         if ip_adapter_image is not None or ip_adapter_image_embeds is not None:
             image_embeds = self.prepare_ip_adapter_image_embeds(
@@ -636,7 +689,9 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
                     latents, "(b n_pbr n) c h w -> b n_pbr n c h w", n=kwargs["num_in_batch"], n_pbr=n_pbr
                 )
                 # latent_model_input = torch.cat([latents] * 3) if self.do_classifier_free_guidance else latents
-                latent_model_input = latents.repeat(3, 1, 1, 1, 1, 1) if self.do_classifier_free_guidance else latents
+                latent_model_input = (
+                    latents.repeat(n_cfg, 1, 1, 1, 1, 1) if self.do_classifier_free_guidance else latents
+                )
                 latent_model_input = rearrange(latent_model_input, "b n_pbr n c h w -> (b n_pbr n) c h w")
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
                 latent_model_input = rearrange(
@@ -644,7 +699,6 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
                 )
 
                 # predict the noise residual
-
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
@@ -660,7 +714,11 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
                 if self.do_classifier_free_guidance:
                     # noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     # noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-                    noise_pred_uncond, noise_pred_ref, noise_pred_full = noise_pred.chunk(3)
+                    if n_cfg == 3:
+                        noise_pred_uncond, noise_pred_ref, noise_pred_full = noise_pred.chunk(3)
+                    else:
+                        noise_pred_uncond, noise_pred_full = noise_pred.chunk(2)
+                        noise_pred_ref = noise_pred_full
 
                     if "camera_azims" in kwargs.keys():
                         camera_azims = kwargs["camera_azims"]
@@ -713,9 +771,12 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
                         step_idx = i // getattr(self.scheduler, "order", 1)
                         callback(step_idx, t, latents)
 
+        _mark('denoise loop')
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False, generator=generator)[0]
+            _mark('vae decode')
             image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
+            _mark('safety checker')
         else:
             image = latents
             has_nsfw_concept = None
@@ -726,6 +787,7 @@ class HunyuanPaintPipeline(StableDiffusionPipeline):
             do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
 
         image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
+        _mark('postprocess')
 
         # Offload all models
         self.maybe_free_model_hooks()
