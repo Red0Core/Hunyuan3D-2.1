@@ -1,3 +1,7 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: configurable render/texture size and face count, VRAM cleanup between stages,
+# and a fix to a resize loop that used the dict length instead of the view count.
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -33,9 +37,30 @@ from diffusers.utils import logging as diffusers_logging
 
 diffusers_logging.set_verbosity(50)
 
+import time
+
+PROFILE = os.environ.get("HY3D_PROFILE", "0") == "1"
+_phase_t = [0.0]
+
+
+def _phase(name):
+    """Log wall time and peak VRAM per texture-stage phase when HY3D_PROFILE=1."""
+    if not PROFILE:
+        return
+    torch.cuda.synchronize()
+    now = time.time()
+    print(
+        f"[hy3dpaint] {name:<22} {now - _phase_t[0]:6.2f}s   "
+        f"peak {torch.cuda.max_memory_allocated() / 2 ** 30:5.2f}GB   "
+        f"now {torch.cuda.memory_allocated() / 2 ** 30:5.2f}GB",
+        flush=True,
+    )
+    torch.cuda.reset_peak_memory_stats()
+    _phase_t[0] = now
+
 
 class Hunyuan3DPaintConfig:
-    def __init__(self, max_num_view, resolution):
+    def __init__(self, max_num_view, resolution, render_size=1024, texture_size=2048, target_face_count=40000):
         self.device = "cuda"
 
         self.multiview_cfg_path = "hy3dpaint/cfgs/hunyuan-paint-pbr.yaml"
@@ -46,10 +71,18 @@ class Hunyuan3DPaintConfig:
 
         self.raster_mode = "cr"
         self.bake_mode = "back_sample"
-        self.render_size = 1024 * 2
-        self.texture_size = 1024 * 4
+        # render_size / texture_size dominate bake-stage VRAM: back_project keeps one
+        # texture_size^2 x3 float32 buffer per view alive at once. 2048 keeps the exported
+        # texture identical to stock (which baked at 4096 then halved on save) at 1/4 the cost.
+        self.render_size = render_size
+        self.texture_size = texture_size
+        # Stock halved the texture on export; only do that when we baked at the old 4096.
+        self.save_downsample = texture_size > 2048
         self.max_selected_view_num = max_num_view
         self.resolution = resolution
+        # Faces kept for UV unwrap / baking. 40k flattens faces and thin limbs on
+        # character meshes; raise it when the subject has fine detail.
+        self.target_face_count = target_face_count
         self.bake_exp = 4
         self.merge_method = "fast"
 
@@ -102,11 +135,15 @@ class Hunyuan3DPaintPipeline:
         else:
             image_prompt = image_path
 
+        _phase_t[0] = time.time()
+        if PROFILE:
+            torch.cuda.reset_peak_memory_stats()
+
         # Process mesh
         path = os.path.dirname(mesh_path)
         if use_remesh:
             processed_mesh_path = os.path.join(path, "white_mesh_remesh.obj")
-            remesh_mesh(mesh_path, processed_mesh_path)
+            remesh_mesh(mesh_path, processed_mesh_path, target_count=self.config.target_face_count)
         else:
             processed_mesh_path = mesh_path
 
@@ -118,6 +155,7 @@ class Hunyuan3DPaintPipeline:
         mesh = trimesh.load(processed_mesh_path)
         mesh = mesh_uv_wrap(mesh)
         self.render.load_mesh(mesh=mesh)
+        _phase('remesh+uvwrap')
 
         ########### View Selection #########
         selected_camera_elevs, selected_camera_azims, selected_view_weights = self.view_processor.bake_view_selection(
@@ -131,6 +169,7 @@ class Hunyuan3DPaintPipeline:
             selected_camera_elevs, selected_camera_azims, use_abs_coor=True
         )
         position_maps = self.view_processor.render_position_multiview(selected_camera_elevs, selected_camera_azims)
+        _phase('view sel + render')
 
         ##########  Style  ###########
         image_caption = "high quality"
@@ -152,17 +191,24 @@ class Hunyuan3DPaintPipeline:
             custom_view_size=self.config.resolution,
             resize_input=True,
         )
+        _phase('multiview diffusion')
         ###########  Enhance  ##########
         enhance_images = {}
         enhance_images["albedo"] = copy.deepcopy(multiviews_pbr["albedo"])
         enhance_images["mr"] = copy.deepcopy(multiviews_pbr["mr"])
+        del multiviews_pbr
+        torch.cuda.empty_cache()
 
         for i in range(len(enhance_images["albedo"])):
             enhance_images["albedo"][i] = self.models["super_model"](enhance_images["albedo"][i])
             enhance_images["mr"][i] = self.models["super_model"](enhance_images["mr"][i])
+        torch.cuda.empty_cache()
+        _phase('realesrgan x%d' % (2 * len(enhance_images["albedo"])))
 
         ###########  Bake  ##########
-        for i in range(len(enhance_images)):
+        # NOTE: this used to iterate over len(enhance_images) (== 2, the dict key count),
+        # so every view past the second was fed to the baker at the raw 4x ESRGAN size.
+        for i in range(len(enhance_images["albedo"])):
             enhance_images["albedo"][i] = enhance_images["albedo"][i].resize(
                 (self.config.render_size, self.config.render_size)
             )
@@ -171,10 +217,13 @@ class Hunyuan3DPaintPipeline:
             enhance_images["albedo"], selected_camera_elevs, selected_camera_azims, selected_view_weights
         )
         mask_np = (mask.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
+        torch.cuda.empty_cache()
         texture_mr, mask_mr = self.view_processor.bake_from_multiview(
             enhance_images["mr"], selected_camera_elevs, selected_camera_azims, selected_view_weights
         )
         mask_mr_np = (mask_mr.squeeze(-1).cpu().numpy() * 255).astype(np.uint8)
+        torch.cuda.empty_cache()
+        _phase('bake (albedo+mr)')
 
         ##########  inpaint  ###########
         texture = self.view_processor.texture_inpaint(texture, mask_np)
@@ -182,8 +231,11 @@ class Hunyuan3DPaintPipeline:
         if "mr" in enhance_images:
             texture_mr = self.view_processor.texture_inpaint(texture_mr, mask_mr_np)
             self.render.set_texture_mr(texture_mr)
+        _phase('uv inpaint')
 
-        self.render.save_mesh(output_mesh_path, downsample=True)
+        self.render.save_mesh(output_mesh_path, downsample=getattr(self.config, "save_downsample", True))
+
+        _phase('save mesh')
 
         if save_glb:
             convert_obj_to_glb(output_mesh_path, output_mesh_path.replace(".obj", ".glb"))
