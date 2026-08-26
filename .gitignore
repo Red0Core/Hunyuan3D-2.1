@@ -183,3 +183,7 @@ demo_untextured.glb
 white_mesh_remesh.obj
 hy3dpaint/ckpt/
 
+
+# Compiled extensions are shipped so users do not need MSVC + CUDA.
+# Line 3 *.py[cod] matches .pyd too, so re-include them explicitly.
+!*.pyd
