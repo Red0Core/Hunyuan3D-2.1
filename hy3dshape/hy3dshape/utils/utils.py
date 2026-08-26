@@ -1,3 +1,6 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: HuggingFace cache resolution, with a fall back to the local cache when offline.
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -93,21 +96,33 @@ def smart_load_model(
     variant,
 ):
     original_model_path = model_path
-    # try local path
+    # Optional local override dir; normally absent, in which case we fall through to the
+    # shared HF cache below. Missing it is the common case, not a problem worth logging.
     base_dir = os.environ.get('HY3DGEN_MODELS', '~/.cache/hy3dgen')
-    model_fld = os.path.expanduser(os.path.join(base_dir, model_path))
     model_path = os.path.expanduser(os.path.join(base_dir, model_path, subfolder))
-    logger.info(f'Try to load model from local path: {model_path}')
-    if not os.path.exists(model_path):
-        logger.info('Model path not exists, try to download from huggingface')
+    if os.path.exists(model_path):
+        logger.info(f'Loading model from local override: {model_path}')
+    else:
         try:
             from huggingface_hub import snapshot_download
             # 只下载指定子目录
-            path = snapshot_download(
-                repo_id=original_model_path,
-                allow_patterns=[f"{subfolder}/*"],  # 关键修改：模式匹配子文件夹
-                local_dir=model_fld 
-            )
+            # No local_dir: use the shared HF hub cache (honours HF_HOME) so the
+            # weights are not duplicated alongside the huggingface download.
+            try:
+                path = snapshot_download(
+                    repo_id=original_model_path,
+                    allow_patterns=[f"{subfolder}/*"],  # 关键修改：模式匹配子文件夹
+                )
+            except Exception as download_error:
+                # Already-cached weights should not be held hostage by a flaky
+                # connection: snapshot_download still contacts the hub to revalidate.
+                logger.warning(f'Hub unreachable ({type(download_error).__name__}), '
+                               f'falling back to the local cache')
+                path = snapshot_download(
+                    repo_id=original_model_path,
+                    allow_patterns=[f"{subfolder}/*"],
+                    local_files_only=True,
+                )
             model_path = os.path.join(path, subfolder)  # 保持路径拼接逻辑不变
         except ImportError:
             logger.warning(
