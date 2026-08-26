@@ -1,3 +1,6 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: Windows kernel source directory and MSVC compile flags.
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -12,19 +15,31 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
+import sys
+
 from setuptools import setup, find_packages
 import torch
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CppExtension
 
 # build custom rasterizer
 
+# The Windows sources use explicit int64_t/uint64_t instead of the INT64 macro
+# and long*, which matters because long is 32-bit on MSVC.
+kernel_dir = "lib/custom_rasterizer_kernel_for_windows" if sys.platform == "win32" else "lib/custom_rasterizer_kernel"
+
+# torch guards an if-constexpr chain in csrc/dynamo/compiled_autograd.h behind
+# _WIN32 && USE_CUDA because it miscompiles on MSVC ("'std': ambiguous symbol"),
+# but cpp_extension never defines USE_CUDA, so define it here.
+extra_compile_args = {"cxx": ["-DUSE_CUDA"], "nvcc": ["-DUSE_CUDA"]} if sys.platform == "win32" else {}
+
 custom_rasterizer_module = CUDAExtension(
     "custom_rasterizer_kernel",
     [
-        "lib/custom_rasterizer_kernel/rasterizer.cpp",
-        "lib/custom_rasterizer_kernel/grid_neighbor.cpp",
-        "lib/custom_rasterizer_kernel/rasterizer_gpu.cu",
+        f"{kernel_dir}/rasterizer.cpp",
+        f"{kernel_dir}/grid_neighbor.cpp",
+        f"{kernel_dir}/rasterizer_gpu.cu",
     ],
+    extra_compile_args=extra_compile_args,
 )
 
 setup(
