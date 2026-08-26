@@ -1,3 +1,6 @@
+# Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
+# Changes: configurable remesh target face count.
+
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -16,8 +19,8 @@ import trimesh
 import pymeshlab
 
 
-def remesh_mesh(mesh_path, remesh_path):
-    mesh = mesh_simplify_trimesh(mesh_path, remesh_path)
+def remesh_mesh(mesh_path, remesh_path, target_count=40000):
+    mesh = mesh_simplify_trimesh(mesh_path, remesh_path, target_count=target_count)
 
 
 def mesh_simplify_trimesh(inputpath, outputpath, target_count=40000):
