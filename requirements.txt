@@ -1,3 +1,6 @@
+# After installing requirnment.txt, Install deepspeed separately.
+# pip install deepspeed --no-build-isolation
+
 --extra-index-url https://mirrors.cloud.tencent.com/pypi/simple/
 --extra-index-url https://mirrors.aliyun.com/pypi/simple
 
@@ -53,7 +56,7 @@ psutil==6.0.0
 cupy-cuda12x==13.4.1
 
 # Blender
-bpy==4.0
+bpy==4.2.0
 
 # ONNX Runtime
 onnxruntime==1.16.3
@@ -64,5 +67,5 @@ pydantic==2.10.6
 timm
 pythreejs
 torchdiffeq
-deepspeed
+# deepspeed  # installed separately below with --no-build-isolation (needs torch visible at build time)
 
