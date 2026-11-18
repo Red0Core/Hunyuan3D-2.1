@@ -203,7 +203,10 @@ def generate(image_path: Path, output_path: Path, preset: str, seed: int) -> dic
         "preset": preset,
         "seed": seed,
         "seconds": round(time.perf_counter() - started, 2),
-        "peak_allocated_gib": round(torch.cuda.max_memory_allocated() / 2**30, 2),
+        "peak_allocated_gib": (
+            None if os.environ.get("HY3D_PROFILE") == "1"
+            else round(torch.cuda.max_memory_allocated() / 2**30, 2)
+        ),
     }
 
 
