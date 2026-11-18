@@ -39,7 +39,8 @@ def fetch_part(url: str, part: Path, index: int, total: int, opener) -> None:
         if have > part_size:
             raise ValueError(f"Unexpected size for {part}")
         start = first + have
-        request = urllib.request.Request(f"{url}?range_part={index}&start={start}", headers={"Range": f"bytes={start}-{last}"})
+        query = f"range_part={index}&start={start}&request={time.time_ns()}"
+        request = urllib.request.Request(f"{url}?{query}", headers={"Range": f"bytes={start}-{last}"})
         try:
             with opener(request, timeout=45) as response:
                 expected = f"bytes {start}-{last}/{total}"
