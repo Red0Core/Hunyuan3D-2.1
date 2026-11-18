@@ -1,3 +1,4 @@
+# Modified for RobloxStoryFactory to load a pinned local paint snapshot.
 # Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
 # Changes: VAE slicing on the multiview decoder, which stopped it overflowing VRAM.
 
@@ -37,12 +38,13 @@ class multiviewDiffusionNet:
         self.cfg = cfg
         self.mode = self.cfg.model.params.stable_diffusion_config.custom_pipeline[2:]
 
-        model_path = huggingface_hub.snapshot_download(
-            repo_id=config.multiview_pretrained_path,
-            allow_patterns=["hunyuan3d-paintpbr-v2-1/*"],
-        )
-
-        model_path = os.path.join(model_path, "hunyuan3d-paintpbr-v2-1")
+        model_path = config.multiview_pretrained_path
+        if not os.path.isdir(model_path):
+            snapshot = huggingface_hub.snapshot_download(
+                repo_id=model_path,
+                allow_patterns=["hunyuan3d-paintpbr-v2-1/*"],
+            )
+            model_path = os.path.join(snapshot, "hunyuan3d-paintpbr-v2-1")
         pipeline = DiffusionPipeline.from_pretrained(
             model_path,
             custom_pipeline=custom_pipeline, 
