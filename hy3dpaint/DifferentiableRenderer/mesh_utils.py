@@ -1,3 +1,4 @@
+# Modified for the isolated Windows CUDA 13.2 profile.
 # Hunyuan 3D is licensed under the TENCENT HUNYUAN NON-COMMERCIAL LICENSE AGREEMENT
 # except for the third-party components listed below.
 # Hunyuan 3D does not impose any additional limitations beyond what is outlined
@@ -14,7 +15,6 @@
 
 import os
 import cv2
-import bpy
 import math
 import numpy as np
 from io import StringIO
@@ -197,21 +197,21 @@ def save_mesh(mesh_path, vtx_pos, pos_idx, vtx_uv, uv_idx, texture, metallic=Non
     )
 
 
-def _setup_blender_scene():
+def _setup_blender_scene(bpy):
     """Setup Blender scene for conversion."""
     if "convert" not in bpy.data.scenes:
         bpy.data.scenes.new("convert")
     bpy.context.window.scene = bpy.data.scenes["convert"]
 
 
-def _clear_scene_objects():
+def _clear_scene_objects(bpy):
     """Clear all objects from current Blender scene."""
     for obj in bpy.context.scene.objects:
         obj.select_set(True)
         bpy.data.objects.remove(obj, do_unlink=True)
 
 
-def _select_mesh_objects():
+def _select_mesh_objects(bpy):
     """Select all mesh objects in scene."""
     bpy.ops.object.select_all(action="DESELECT")
     for obj in bpy.context.scene.objects:
@@ -219,7 +219,7 @@ def _select_mesh_objects():
             obj.select_set(True)
 
 
-def _merge_vertices_if_needed(merge_vertices: bool):
+def _merge_vertices_if_needed(bpy, merge_vertices: bool):
     """Merge duplicate vertices if requested."""
     if not merge_vertices:
         return
@@ -233,19 +233,19 @@ def _merge_vertices_if_needed(merge_vertices: bool):
             bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def _apply_shading(shade_type: str, auto_smooth_angle: float):
+def _apply_shading(bpy, shade_type: str, auto_smooth_angle: float):
     """Apply shading to selected objects."""
     shading_ops = {
         "SMOOTH": lambda: bpy.ops.object.shade_smooth(),
         "FLAT": lambda: bpy.ops.object.shade_flat(),
-        "AUTO_SMOOTH": lambda: _apply_auto_smooth(auto_smooth_angle),
+        "AUTO_SMOOTH": lambda: _apply_auto_smooth(bpy, auto_smooth_angle),
     }
 
     if shade_type in shading_ops:
         shading_ops[shade_type]()
 
 
-def _apply_auto_smooth(auto_smooth_angle: float):
+def _apply_auto_smooth(bpy, auto_smooth_angle: float):
     """Apply auto smooth based on Blender version."""
     angle_rad = math.radians(auto_smooth_angle)
 
@@ -266,16 +266,18 @@ def convert_obj_to_glb(
 ) -> bool:
     """Convert OBJ file to GLB format using Blender."""
     try:
-        _setup_blender_scene()
-        _clear_scene_objects()
+        import bpy
+
+        _setup_blender_scene(bpy)
+        _clear_scene_objects(bpy)
 
         # Import OBJ file
         bpy.ops.wm.obj_import(filepath=obj_path)
-        _select_mesh_objects()
+        _select_mesh_objects(bpy)
 
         # Process meshes
-        _merge_vertices_if_needed(merge_vertices)
-        _apply_shading(shade_type, auto_smooth_angle)
+        _merge_vertices_if_needed(bpy, merge_vertices)
+        _apply_shading(bpy, shade_type, auto_smooth_angle)
 
         # Export to GLB
         bpy.ops.export_scene.gltf(filepath=glb_path, use_active_scene=True)

@@ -192,3 +192,8 @@ hy3dpaint/ckpt/
 /.hunyuan-tmp/
 /outputs/
 /u2net/
+
+# Machine-local package input and rebuilt binaries
+/.wheelhouse/
+*.cp313-win_amd64.pyd
+/.cuda-13.2.1/

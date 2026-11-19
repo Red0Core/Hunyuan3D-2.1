@@ -1,53 +1,56 @@
 [project]
 name = "hunyuan3d-windows-inference"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hunyuan3D 2.1 Windows inference environment"
-requires-python = "==3.11.*"
+requires-python = "==3.13.*"
 dependencies = [
     "accelerate==1.1.1",
     "basicsr==1.4.2",
-    "bpy==4.2.0",
     "diffusers==0.30.0",
     "einops==0.8.0",
     "hf-xet==1.8.0",
     "huggingface-hub==0.30.2",
-    "numpy==1.24.4",
+    "numpy==2.4.6",
     "omegaconf==2.3.0",
-    "onnxruntime==1.16.3",
-    "opencv-python==4.10.0.84",
-    "opencv-python-headless==4.10.0.84",
-    "pillow<12",
+    "onnxruntime==1.31.1",
+    "opencv-python==4.13.0.92",
+    "opencv-python-headless==4.13.0.92",
+    "pillow>=11.3,<14",
     "pybind11==2.13.4",
     "pygltflib==1.16.3",
-    "pymeshlab==2022.2.post3",
+    "pymeshlab==2025.7.post1",
     "pytorch-lightning==1.9.5",
-    "pyyaml==6.0.2",
+    "pyyaml==6.0.3",
     "realesrgan==0.3.0",
     "rembg==2.0.65",
     "safetensors==0.4.4",
-    "scikit-image==0.24.0",
-    "scipy==1.14.1",
+    "scikit-image>=0.25.2,<1",
+    "scipy>=1.16,<2",
     "setuptools<82",
     "tb-nightly==2.18.0a20240726",
     "timm<2",
-    "torch==2.11.0+cu128",
+    "torch==2.15.0+cu132",
     "torchdiffeq==0.2.5",
     "torchmetrics==1.6.0",
-    "torchvision==0.26.0+cu128",
+    "torchvision==0.29.2+cu132",
     "transformers==4.46.3",
     "trimesh==4.4.7",
-    "xatlas==0.0.9",
+    "xatlas>=0.0.11,<0.1",
 ]
+
+[project.optional-dependencies]
+blender = ["bpy==5.3.0"]
 
 [tool.uv]
 package = false
 environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
+basicsr = { path = ".wheelhouse/basicsr-1.4.2-py3-none-any.whl" }
+torch = { index = "pytorch-cu132" }
+torchvision = { index = "pytorch-cu132" }
 
 [[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
 explicit = true

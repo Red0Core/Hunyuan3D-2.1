@@ -1,3 +1,4 @@
+// Modified for the isolated Windows CUDA 13.2 profile.
 /*
  * Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
  * Changes: explicit int64_t/uint64_t instead of the INT64 macro and long*, because
@@ -121,10 +122,10 @@ std::vector<torch::Tensor> rasterize_image_gpu(torch::Tensor V, torch::Tensor F,
     auto z_min = torch::ones({height, width}, INT64_options) * (int64_t)maxint;
 
     if (!use_depth_prior) {
-        rasterizeImagecoordsKernelGPU<<<(num_faces+255)/256,256,0,at::cuda::getCurrentCUDAStream()>>>(V.data_ptr<float>(), F.data_ptr<int>(), 0,
+        rasterizeImagecoordsKernelGPU<<<(num_faces+255)/256,256,0,c10::cuda::getCurrentCUDAStream()>>>(V.data_ptr<float>(), F.data_ptr<int>(), 0,
             (uint64_t*)z_min.data_ptr<int64_t>(), occlusion_truncation, width, height, num_vertices, num_faces); 
     } else {
-        rasterizeImagecoordsKernelGPU<<<(num_faces+255)/256,256,0,at::cuda::getCurrentCUDAStream()>>>(V.data_ptr<float>(), F.data_ptr<int>(), D.data_ptr<float>(),
+        rasterizeImagecoordsKernelGPU<<<(num_faces+255)/256,256,0,c10::cuda::getCurrentCUDAStream()>>>(V.data_ptr<float>(), F.data_ptr<int>(), D.data_ptr<float>(),
             (uint64_t*)z_min.data_ptr<int64_t>(), occlusion_truncation, width, height, num_vertices, num_faces); 
     }
 
