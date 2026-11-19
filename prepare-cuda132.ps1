@@ -1,13 +1,13 @@
 param([switch]$Download)
 $ErrorActionPreference = 'Stop'
-$Version = '13.2.1'
+$Version = '13.2.2'
 $Base = 'https://developer.download.nvidia.com/compute/cuda/redist'
 $Parts = [ordered]@{
-    cuda_nvcc   = @{ Path = 'cuda_nvcc/windows-x86_64/cuda_nvcc-windows-x86_64-13.2.78-archive.zip'; Bytes = 31257705 }
-    cuda_cudart = @{ Path = 'cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-13.2.75-archive.zip'; Bytes = 3094062 }
-    cuda_cccl   = @{ Path = 'cuda_cccl/windows-x86_64/cuda_cccl-windows-x86_64-13.2.75-archive.zip'; Bytes = 3519616 }
-    cuda_crt    = @{ Path = 'cuda_crt/windows-x86_64/cuda_crt-windows-x86_64-13.2.78-archive.zip'; Bytes = 139371 }
-    libnvvm     = @{ Path = 'libnvvm/windows-x86_64/libnvvm-windows-x86_64-13.2.78-archive.zip'; Bytes = 55236155 }
+    cuda_nvcc   = @{ Path = 'cuda_nvcc/windows-x86_64/cuda_nvcc-windows-x86_64-13.2.86-archive.zip'; Bytes = 31078504 }
+    cuda_cudart = @{ Path = 'cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-13.2.86-archive.zip'; Bytes = 3094421 }
+    cuda_cccl   = @{ Path = 'cuda_cccl/windows-x86_64/cuda_cccl-windows-x86_64-13.2.86-archive.zip'; Bytes = 3519613 }
+    cuda_crt    = @{ Path = 'cuda_crt/windows-x86_64/cuda_crt-windows-x86_64-13.2.86-archive.zip'; Bytes = 139368 }
+    libnvvm     = @{ Path = 'libnvvm/windows-x86_64/libnvvm-windows-x86_64-13.2.86-archive.zip'; Bytes = 55237784 }
 }
 $Cache = Join-Path $PSScriptRoot ".hunyuan-tmp\cuda-redist-$Version"
 $Toolkit = Join-Path $PSScriptRoot ".cuda-$Version"

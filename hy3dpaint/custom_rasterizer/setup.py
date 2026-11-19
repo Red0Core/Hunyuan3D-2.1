@@ -1,3 +1,4 @@
+# Modified for the MSVC conforming preprocessor in the CUDA 13 profile.
 # Modified by official-imvoiid (Hunyuan3D-2.1 Windows / 16GB VRAM fork).
 # Changes: Windows kernel source directory and MSVC compile flags.
 
@@ -30,7 +31,11 @@ kernel_dir = "lib/custom_rasterizer_kernel_for_windows" if sys.platform == "win3
 # torch guards an if-constexpr chain in csrc/dynamo/compiled_autograd.h behind
 # _WIN32 && USE_CUDA because it miscompiles on MSVC ("'std': ambiguous symbol"),
 # but cpp_extension never defines USE_CUDA, so define it here.
-extra_compile_args = {"cxx": ["-DUSE_CUDA"], "nvcc": ["-DUSE_CUDA"]} if sys.platform == "win32" else {}
+# CUDA 13 CCCL expects the conforming MSVC preprocessor, including under nvcc.
+extra_compile_args = {
+    "cxx": ["-DUSE_CUDA", "/Zc:preprocessor"],
+    "nvcc": ["-DUSE_CUDA", "-Xcompiler=/Zc:preprocessor"],
+} if sys.platform == "win32" else {}
 
 custom_rasterizer_module = CUDAExtension(
     "custom_rasterizer_kernel",

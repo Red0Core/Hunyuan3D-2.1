@@ -197,3 +197,4 @@ hy3dpaint/ckpt/
 /.wheelhouse/
 *.cp313-win_amd64.pyd
 /.cuda-13.2.1/
+/.cuda-13.2.2/
