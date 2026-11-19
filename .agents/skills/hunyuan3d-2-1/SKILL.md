@@ -22,9 +22,9 @@ Set-Location -LiteralPath 'D:\Hunyuan3D-2.1-cu132'
 $env:HF_HUB_OFFLINE = '1'
 $env:TRANSFORMERS_OFFLINE = '1'
 $env:UV_OFFLINE = '1'
-.\run-windows.ps1 generate 'D:\path\reference.png' 'D:\path\prop.glb' --preset quality --seed 1234
+uv run --locked --no-sync python hunyuan_cli.py generate 'D:\path\reference.png' 'D:\path\prop.glb' --preset quality --seed 1234
 if ($LASTEXITCODE) { throw 'Hunyuan generation failed' }
-.\run-windows.ps1 verify 'D:\path\prop.glb'
+uv run --locked --no-sync python hunyuan_cli.py verify 'D:\path\prop.glb'
 ```
 
 Use `draft` for iteration and `quality` for visible hero props with GPU headroom. Give each export a unique path. Keep the input and raw GLB with the project deliverables or in the checkout's `outputs` when no project path was specified. Report the measured time and settings when comparing outputs. The same seed across Torch builds can produce different starting noise, so record the profile as well as the seed.
