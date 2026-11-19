@@ -46,7 +46,7 @@ package = false
 environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
 
 [tool.uv.sources]
-basicsr = { path = ".wheelhouse/basicsr-1.4.2-py3-none-any.whl" }
+basicsr = { path = "vendor/basicsr-1.4.2-py3-none-any.whl" }
 torch = { index = "pytorch-cu132" }
 torchvision = { index = "pytorch-cu132" }
 

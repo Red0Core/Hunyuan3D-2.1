@@ -33,9 +33,7 @@ $Packages = @($Catalog.packages | Where-Object {
     $_.language -in 'en-US',$null
 })
 if ($Packages.Count -ne 4) { throw 'The installed catalog is missing the four MSVC 14.50 x64 packages.' }
-$Tun = (Get-NetIPAddress -InterfaceAlias singbox_tun -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Select-Object -First 1).IPAddress
-if (-not $Tun) { throw 'Start singbox_tun before downloading MSVC.' }
+$Tun = (& (Join-Path $PSScriptRoot 'get-tun.ps1')).IPAddress
 
 New-Item -ItemType Directory -Force -Path $Tools | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem

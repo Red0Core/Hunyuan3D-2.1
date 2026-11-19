@@ -18,9 +18,7 @@ $Parts.GetEnumerator() | ForEach-Object {
 "Total: $Total bytes. Destination: $Toolkit"
 if (-not $Download) { return }
 
-$Tun = (Get-NetIPAddress -InterfaceAlias 'singbox_tun' -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Select-Object -First 1).IPAddress
-if (-not $Tun) { throw 'Start singbox_tun before downloading.' }
+$Tun = (& (Join-Path $PSScriptRoot 'get-tun.ps1')).IPAddress
 New-Item -ItemType Directory -Path $Cache, $Toolkit -Force | Out-Null
 $ManifestPath = Join-Path $Cache 'redistrib.json'
 & curl.exe --interface $Tun -fLsS --retry 4 --connect-timeout 25 --output $ManifestPath "$Base/redistrib_$Version.json"

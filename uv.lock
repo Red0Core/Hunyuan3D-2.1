@@ -103,7 +103,7 @@ wheels = [
 [[package]]
 name = "basicsr"
 version = "1.4.2"
-source = { path = ".wheelhouse/basicsr-1.4.2-py3-none-any.whl" }
+source = { path = "vendor/basicsr-1.4.2-py3-none-any.whl" }
 dependencies = [
     { name = "addict" },
     { name = "future" },
@@ -491,7 +491,7 @@ blender = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", specifier = "==1.1.1" },
-    { name = "basicsr", path = ".wheelhouse/basicsr-1.4.2-py3-none-any.whl" },
+    { name = "basicsr", path = "vendor/basicsr-1.4.2-py3-none-any.whl" },
     { name = "bpy", marker = "extra == 'blender'", specifier = "==5.3.0" },
     { name = "diffusers", specifier = "==0.30.0" },
     { name = "einops", specifier = "==0.8.0" },
